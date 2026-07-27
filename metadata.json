@@ -1,0 +1,6 @@
+{
+  "name": "Portal360 AI Studio",
+  "description": "Plataforma 100% Client-Side de corte corporal em tempo real, visualização 360° com giroscópio, conversor 2D para equirretangular, IA Gemini 3.5 Flash e Firebase Auth/Storage.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

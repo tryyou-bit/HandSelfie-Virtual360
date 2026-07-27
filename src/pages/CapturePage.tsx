@@ -3,6 +3,7 @@ import { Background360, AnchorPoint, UserPoseState } from '../types';
 import { Panorama360Viewer } from '../components/Panorama360Viewer';
 import { CameraStream } from '../components/CameraStream';
 import { Camera, Sliders, Check, Shield, SwitchCamera, Video, VideoOff } from 'lucide-react';
+import { saveCaptureSnapshot } from '../services/firebase';
 
 interface CapturePageProps {
   backgrounds: Background360[];
@@ -44,6 +45,11 @@ export const CapturePage: React.FC<CapturePageProps> = ({
         link.download = `360you-Capture-${Date.now()}.png`;
         link.href = dataUrl;
         link.click();
+
+        // Salva cópia da captura no Firestore do Usuário
+        saveCaptureSnapshot(dataUrl, selectedBackgroundId).catch(err => {
+          console.warn('Persistência no Firestore falhou:', err);
+        });
       } catch (err) {
         console.error('Erro ao capturar imagem da câmera 360:', err);
       }

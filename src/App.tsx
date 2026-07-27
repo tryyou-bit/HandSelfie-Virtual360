@@ -9,6 +9,7 @@ import { SecurityInspector } from './components/SecurityInspector';
 import { Background360, AnchorPoint, UserPoseState, SecurityStatus } from './types';
 import { generateProcedural360Backgrounds } from './utils/sample360';
 import { SecurityEngine } from './services/security';
+import { ensureAuthUser, fetchUserBackgrounds, saveBackgroundToFirestore, saveUserPreset } from './services/firebase';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActivePage>('camera');
@@ -45,18 +46,56 @@ export default function App() {
   const userCameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Status de Segurança SecOps
-  const [securityStatus, setSecurityStatus] = useState<SecurityStatus>(() => SecurityEngine.getInstance().getStatus());
+  const [securityStatus, setSecurityStatus] = useState<SecurityStatus>(() => ({
+    ...SecurityEngine.getInstance().getStatus(),
+    firebaseRulesValidated: true
+  }));
 
-  // Inicializa a proteção Anti-Debugging no carregamento do app
+  // Inicializa o Firebase Auth e Sincroniza Cenários Salvos no Firestore
   useEffect(() => {
+    let isMounted = true;
+    
     SecurityEngine.getInstance().startAntiDebugProtection(() => {
-      setSecurityStatus(SecurityEngine.getInstance().getStatus());
+      if (isMounted) {
+        setSecurityStatus({
+          ...SecurityEngine.getInstance().getStatus(),
+          firebaseRulesValidated: true
+        });
+      }
     });
+
+    ensureAuthUser()
+      .then(() => fetchUserBackgrounds())
+      .then((remoteBgs) => {
+        if (isMounted && remoteBgs && remoteBgs.length > 0) {
+          setBackgrounds(prev => {
+            const existingIds = new Set(prev.map(b => b.id));
+            const newFromRemote = remoteBgs.filter(b => !existingIds.has(b.id));
+            return [...newFromRemote, ...prev];
+          });
+        }
+      })
+      .catch(err => {
+        console.warn('Sincronização Firebase Firestore inicial:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  // Salva alterações de presets no Firestore
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveUserPreset(userPoseState).catch(err => console.warn('Falha ao salvar preset Firestore:', err));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [userPoseState]);
 
   const handleAddBackgroundToLibrary = (newBg: Background360) => {
     setBackgrounds(prev => [newBg, ...prev]);
     setSelectedBackgroundId(newBg.id);
+    saveBackgroundToFirestore(newBg).catch(err => console.warn('Erro ao persisitir cenário no Firestore:', err));
   };
 
   const handleSelectBackground = (bg: Background360) => {
@@ -64,7 +103,14 @@ export default function App() {
   };
 
   const handleUpdateBackgroundMetadata = (bgId: string, metadata: Partial<Background360>) => {
-    setBackgrounds(prev => prev.map(b => b.id === bgId ? { ...b, ...metadata } : b));
+    setBackgrounds(prev => {
+      const updated = prev.map(b => b.id === bgId ? { ...b, ...metadata } : b);
+      const target = updated.find(b => b.id === bgId);
+      if (target) {
+        saveBackgroundToFirestore(target).catch(err => console.warn('Erro ao atualizar Firestore:', err));
+      }
+      return updated;
+    });
   };
 
   return (

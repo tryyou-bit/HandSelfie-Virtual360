@@ -204,9 +204,6 @@ export const Panorama360Viewer: React.FC<Panorama360ViewerProps> = ({
             finalRgb = decontaminatedColor;
           }
 
-            finalRgb = decontaminatedColor;
-          }
-
           float finalAlpha = refinedAlpha * uOpacity;
 
           if (finalAlpha < 0.005) {

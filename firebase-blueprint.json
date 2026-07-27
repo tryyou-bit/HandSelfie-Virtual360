@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "backgrounds360": {
+      "title": "360 Background Scenarios",
+      "description": "User uploaded and custom 360 equirectangular background scenarios",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "dataUrl": { "type": "string" },
+        "isUserUploaded": { "type": "boolean" },
+        "lightingType": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "category", "dataUrl"]
+    },
+    "captures": {
+      "title": "Captured Photos",
+      "description": "User captured 360 composite snapshots",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "dataUrl": { "type": "string" },
+        "backgroundId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "dataUrl", "createdAt"]
+    },
+    "userPresets": {
+      "title": "User Camera Presets",
+      "description": "Saved user camera cutout presets",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bodyOpacity": { "type": "number" },
+        "bodyScale": { "type": "number" },
+        "positionY": { "type": "number" },
+        "positionX": { "type": "number" },
+        "segmentationThreshold": { "type": "number" },
+        "feathering": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId"]
+    }
+  },
+  "securityRules": [
+    {
+      "collection": "backgrounds360",
+      "allow": {
+        "read": true,
+        "write": "request.auth != null"
+      }
+    },
+    {
+      "collection": "captures",
+      "allow": {
+        "read": "request.auth != null && resource.data.userId == request.auth.uid",
+        "write": "request.auth != null && request.resource.data.userId == request.auth.uid"
+      }
+    },
+    {
+      "collection": "userPresets",
+      "allow": {
+        "read": "request.auth != null && resource.data.userId == request.auth.uid",
+        "write": "request.auth != null && request.resource.data.userId == request.auth.uid"
+      }
+    }
+  ]
+}

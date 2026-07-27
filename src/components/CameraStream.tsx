@@ -202,38 +202,48 @@ export const CameraStream: React.FC<CameraStreamProps> = ({
 
       let stream: MediaStream | null = null;
 
-      // Tenta inicializar stream com resolução Full HD / HD travado em max 30 FPS para dar folga de processamento à IA
+      // Tenta inicializar stream com resolução Full HD / HD com fallback resiliente e delay para desalocação de hardware
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: facingConstraint },
             width: { ideal: 1920 },
             height: { ideal: 1080 },
-            frameRate: { ideal: 30, max: 30 }
+            frameRate: { ideal: 30 }
           },
           audio: false
         });
       } catch (err) {
-        console.warn('Tentativa com resolução Full HD falhou, tentando HD 720p a 30 FPS...', err);
+        console.warn('Tentativa com resolução Full HD falhou, tentando HD 720p...', err);
+        await new Promise(r => setTimeout(r, 200));
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: { ideal: facingConstraint },
               width: { ideal: 1280 },
               height: { ideal: 720 },
-              frameRate: { ideal: 30, max: 30 }
+              frameRate: { ideal: 30 }
             },
             audio: false
           });
         } catch (hdErr) {
-          console.warn('Tentativa com HD falhou, utilizando fallback básico de câmera a 30 FPS...', hdErr);
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: facingConstraint,
-              frameRate: { ideal: 30, max: 30 }
-            },
-            audio: false
-          });
+          console.warn('Tentativa com HD falhou, tentando modo básico de câmera com orientação...', hdErr);
+          await new Promise(r => setTimeout(r, 200));
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode: { ideal: facingConstraint }
+              },
+              audio: false
+            });
+          } catch (facingErr) {
+            console.warn('Tentativa com facingMode falhou, utilizando fallback universal { video: true }...', facingErr);
+            await new Promise(r => setTimeout(r, 250));
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false
+            });
+          }
         }
       }
 

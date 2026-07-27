@@ -35,9 +35,9 @@ const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabas
 
 const googleProvider = new GoogleAuthProvider();
 
-// Garantia de Login Anônimo Automático ou Persistido
-export async function ensureAuthUser(): Promise<User> {
-  return new Promise((resolve, reject) => {
+// Garantia de Login Anônimo Automático ou Persistido com Fallback
+export async function ensureAuthUser(): Promise<User | null> {
+  return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         unsubscribe();
@@ -47,9 +47,14 @@ export async function ensureAuthUser(): Promise<User> {
           const cred = await signInAnonymously(auth);
           unsubscribe();
           resolve(cred.user);
-        } catch (err) {
+        } catch (err: any) {
           unsubscribe();
-          reject(err);
+          if (err?.code === 'auth/admin-restricted-operation' || err?.code === 'auth/operation-not-allowed') {
+            console.warn('⚠️ Firebase Auth: Autenticação anônima está desativada no Firebase Console. Usando modo de persistência local.');
+          } else {
+            console.warn('⚠️ Falha no login anônimo do Firebase:', err?.message || err);
+          }
+          resolve(null);
         }
       }
     });
@@ -67,13 +72,23 @@ export async function saveBackgroundToFirestore(bg: {
   tags?: string[];
   description?: string;
 }) {
-  const user = await ensureAuthUser();
-  const bgRef = doc(db, 'backgrounds360', bg.id);
-  await setDoc(bgRef, {
-    ...bg,
-    userId: user.uid,
-    createdAt: new Date().toISOString()
-  }, { merge: true });
+  try {
+    const user = await ensureAuthUser();
+    if (!user) {
+      // Guarda em cache local caso não haja usuário autenticado no Firebase
+      localStorage.setItem(`bg_cache_${bg.id}`, JSON.stringify(bg));
+      return;
+    }
+    const bgRef = doc(db, 'backgrounds360', bg.id);
+    await setDoc(bgRef, {
+      ...bg,
+      userId: user.uid,
+      createdAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Persistência do cenário no Firestore falhou (usando armazenamento local):', err);
+    localStorage.setItem(`bg_cache_${bg.id}`, JSON.stringify(bg));
+  }
 }
 
 export async function fetchUserBackgrounds(): Promise<any[]> {
@@ -92,25 +107,40 @@ export async function fetchUserBackgrounds(): Promise<any[]> {
 
 // Serviços do Firestore para Capturas
 export async function saveCaptureSnapshot(dataUrl: string, backgroundId: string) {
-  const user = await ensureAuthUser();
-  const capturesRef = collection(db, 'captures');
-  return await addDoc(capturesRef, {
-    userId: user.uid,
-    dataUrl,
-    backgroundId,
-    createdAt: new Date().toISOString()
-  });
+  try {
+    const user = await ensureAuthUser();
+    if (!user) return null;
+    const capturesRef = collection(db, 'captures');
+    return await addDoc(capturesRef, {
+      userId: user.uid,
+      dataUrl,
+      backgroundId,
+      createdAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.warn('Aviso ao salvar captura no Firestore:', err);
+    return null;
+  }
 }
 
 // Presets do Usuário
 export async function saveUserPreset(presetData: Record<string, any>) {
-  const user = await ensureAuthUser();
-  const presetRef = doc(db, 'userPresets', user.uid);
-  await setDoc(presetRef, {
-    userId: user.uid,
-    ...presetData,
-    updatedAt: new Date().toISOString()
-  }, { merge: true });
+  try {
+    // Guarda em localStorage sempre como garantia imediata
+    localStorage.setItem('360you_user_preset', JSON.stringify(presetData));
+    
+    const user = await ensureAuthUser();
+    if (!user) return;
+    
+    const presetRef = doc(db, 'userPresets', user.uid);
+    await setDoc(presetRef, {
+      userId: user.uid,
+      ...presetData,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Aviso ao sincronizar preset com Firestore:', err);
+  }
 }
 
 export { app, auth, db, googleProvider, signInWithPopup, signOut };
